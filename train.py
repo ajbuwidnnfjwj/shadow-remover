@@ -9,12 +9,13 @@ from Model import Generator, Discriminator
 from ImageSet import ImageFolder
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(device)
 
 # 하이퍼파라미터 설정
 batch_size = 64
 epochs = 1000
 learning_rate = 0.002
-image_size = (256, 256, 3)
+image_size = (3, 256, 256)
 
 generator = Generator(image_size).to(device)
 discriminator = Discriminator(image_size).to(device)
@@ -28,7 +29,7 @@ transform = transforms.Compose([
     transforms.Resize((256, 256)),  # 이미지 크기 조정
     transforms.ToTensor()
 ])
-dataset = ImageFolder(root='drive/MyDrive/images/', transform=transform)
+dataset = ImageFolder(root='images/', transform=transform)
 dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
 
 # 훈련 루프

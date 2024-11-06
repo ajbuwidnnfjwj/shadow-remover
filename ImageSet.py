@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
-
+import os
 
 class ImageFolder(Dataset):
     def __init__(self, root, transform=None):
