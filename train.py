@@ -68,3 +68,10 @@ for epoch in range(epochs):
         g_loss = criterion(fake_outputs, real_labels)
         g_loss.backward()
         optimizer_G.step()
+
+        # 진행 상황 출력
+        if i % 10 == 0:
+            print(f"Epoch [{epoch + 1}/{epochs}], Step [{i}/{len(dataloader)}], "
+                  f"D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
+
+torch.save(generator.state_dict(), 'generator.pth')
