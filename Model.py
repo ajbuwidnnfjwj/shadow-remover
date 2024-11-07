@@ -4,12 +4,15 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
-import torchvision
-import torchvision.transforms as transforms
+import torchvision.models as models
 
-class UNet(nn.Module):
+class Generator(nn.Module):
+    '''UNet based Generator'''
     def __init__(self, size):
-        super(UNet, self).__init__()
+        '''
+        :param size: tuple for size of input image (channels, height, width)
+        '''
+        super(Generator, self).__init__()
         # 인코더
         self.enc1 = self.conv_block(size[0], 64)
         self.enc2 = self.conv_block(64, 128)
@@ -51,28 +54,26 @@ class UNet(nn.Module):
 
         return out
 
-class Generator(nn.Module):
-    def __init__(self, size):
-        super(Generator, self).__init__()
-        self.model = UNet(size)
-
-    def forward(self, z):
-        return self.model(z)
-
 # 판별기 정의
 class Discriminator(nn.Module):
     def __init__(self, image_size):
         super(Discriminator, self).__init__()
-        input_size = image_size[0] * image_size[1] * image_size[2]
-        self.model = nn.Sequential(
-            nn.Linear(input_size, 256),
-            nn.LeakyReLU(0.2),
-            nn.Linear(256, 128),
-            nn.LeakyReLU(0.2),
-            nn.Linear(128, 1),
-            nn.Sigmoid()
+        self.model = models.vgg16(pretrained=True)
+        for param in self.model.parameters():  # 합성곱 레이어는 초기화하지 않음
+            param.requires_grad = False
+        num_features = self.model.classifier[6].in_features
+        self.model.classifier[6] = nn.Sequential(
+            nn.Linear(num_features, 512),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, 1),
+            nn.Softmax(dim=1)
         )
 
+
     def forward(self, img):
-        img_flat = img.view(img.size(0), -1)
-        return self.model(img_flat)
+        '''
+        :param img: A batch of input images
+        :return:
+        '''
+        return self.model(img)

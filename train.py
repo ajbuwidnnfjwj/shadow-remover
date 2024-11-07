@@ -8,12 +8,17 @@ import torchvision.transforms as transforms
 from Model import Generator, Discriminator
 from ImageSet import ImageFolder
 
+import matplotlib.pyplot as plt
+
+import cv2 as cv
+import numpy as np
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 # 하이퍼파라미터 설정
 batch_size = 64
-epochs = 1000
+epochs = 300
 learning_rate = 0.002
 image_size = (3, 256, 256)
 
@@ -55,6 +60,7 @@ for epoch in range(epochs):
         fake_outputs = discriminator(fake_images.detach())
         d_loss_fake = criterion(fake_outputs, fake_labels)
 
+
         # 판별기 손실과 업데이트
         d_loss = d_loss_real + d_loss_fake
         d_loss.backward()
@@ -73,5 +79,11 @@ for epoch in range(epochs):
         if i % 10 == 0:
             print(f"Epoch [{epoch + 1}/{epochs}], Step [{i}/{len(dataloader)}], "
                   f"D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
+            transform = transforms.Compose([
+                transforms.ToPILImage()
+            ])
+            plt.imshow(transform(fake_images[0]))
+            plt.axis('off')
+            plt.show()
 
 torch.save(generator.state_dict(), 'generator.pth')
