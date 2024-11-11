@@ -7,7 +7,7 @@ class ImageFolder(Dataset):
         self.root = root
         self.transform = transform
         self.path_noise = [root+'shadowed/'+fname for fname in os.listdir(root+'shadowed')]
-        self.path_removed = [root + 'removed/' + fname for fname in os.listdir(root + 'removed')]
+        self.path_removed = [root + 'mask/' + fname for fname in os.listdir(root + 'mask')]
 
     def __len__(self):
         return len(self.path_noise) \

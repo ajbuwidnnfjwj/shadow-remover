@@ -17,73 +17,66 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 # 하이퍼파라미터 설정
-batch_size = 64
-epochs = 300
+batch_size = 30
+epochs = 100
 learning_rate = 0.002
 image_size = (3, 256, 256)
 
-generator = Generator(image_size).to(device)
+# 손실 함수 정의
+criterion_GAN = nn.MSELoss()  # Adversarial loss
+creterion_identity = nn.L1Loss()    # identity_loss
+
+# 모델 초기화
+generator_f = Generator(image_size).to(device)
+generator_s = Generator((4,256,256)).to(device)
 discriminator = Discriminator(image_size).to(device)
 
-# 손실 함수와 옵티마이저 정의
-criterion = nn.BCELoss()
-optimizer_G = optim.Adam(generator.parameters(), lr=learning_rate)
-optimizer_D = optim.Adam(discriminator.parameters(), lr=learning_rate)
+# 옵티마이저 정의
+optimizer_G = optim.Adam(list(generator_f.parameters())+list(generator_s.parameters()),
+                          lr=0.0002, betas=(0.5, 0.999))
+optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
 transform = transforms.Compose([
     transforms.Resize((256, 256)),  # 이미지 크기 조정
     transforms.ToTensor()
 ])
 dataset = ImageFolder(root='images/', transform=transform)
-dataloader = DataLoader(dataset, batch_size=10, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # 훈련 루프
 for epoch in range(epochs):
-    for i, (shadowed_images, real_images) in enumerate(dataloader):
-        shadowed_images = shadowed_images.to(device)
-        real_images = real_images.to(device)
-        batch_size = real_images.size(0)
+    for i, (shadow, mask) in enumerate(dataloader):
+        shadow = shadow.to(device)
+        mask = mask.to(device)
 
-        # 진짜 및 가짜 레이블 생성
-        real_labels = torch.ones((batch_size, 1)).to(device)
-        fake_labels = torch.zeros((batch_size, 1)).to(device)
-
-        # 판별기 훈련
-        optimizer_D.zero_grad()
-
-        # 진짜 이미지 손실 계산
-        real_outputs = discriminator(real_images)
-        d_loss_real = criterion(real_outputs, real_labels)
-
-        # 가짜 이미지 생성 및 손실 계산
-        fake_images = generator(shadowed_images)
-        fake_outputs = discriminator(fake_images.detach())
-        d_loss_fake = criterion(fake_outputs, fake_labels)
-
-
-        # 판별기 손실과 업데이트
-        d_loss = d_loss_real + d_loss_fake
-        d_loss.backward()
-        optimizer_D.step()
-
-        # 생성기 훈련
+        # ---------------------
+        # Generator 훈련
+        # ---------------------
         optimizer_G.zero_grad()
 
-        # 생성된 이미지 손실 계산
-        fake_outputs = discriminator(fake_images)
-        g_loss = criterion(fake_outputs, real_labels)
-        g_loss.backward()
+        # 그림자 제거 이미지 생성
+        shadow_free = generator_f(shadow)
+        Gs_input = torch.cat((shadow_free, mask), 1)
+        shadow_fake = generator_s(Gs_input)
+
+        identity_loss = creterion_identity(shadow, shadow_fake)
+        identity_loss.backward()
         optimizer_G.step()
 
-        # 진행 상황 출력
-        if i % 10 == 0:
-            print(f"Epoch [{epoch + 1}/{epochs}], Step [{i}/{len(dataloader)}], "
-                  f"D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
-            transform = transforms.Compose([
-                transforms.ToPILImage()
-            ])
-            plt.imshow(transform(fake_images[0]))
-            plt.axis('off')
-            plt.show()
+        # ---------------------
+        # Discriminator 훈련
+        # ---------------------
+        optimizer_D.zero_grad()
+        predicted = discriminator(shadow_free.detach())
 
-torch.save(generator.state_dict(), 'generator.pth')
+        label = torch.zeros_like(predicted)
+
+        adversarial_loss = criterion_GAN(predicted, label)
+        adversarial_loss.backward()
+        optimizer_D.step()
+
+        if i % 10 == 0:
+            print(f"Epoch [{epoch+1}/{epochs}], "
+                  f"Loss G: {identity_loss.item():.4f}, Loss D: {adversarial_loss.item():.4f}")
+
+torch.save(generator_f.state_dict(), 'generator.pth')
