@@ -17,18 +17,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 # 하이퍼파라미터 설정
-batch_size = 30
-epochs = 100
+BATCH_SIZE = 10
+epochs = 300
 learning_rate = 0.002
 image_size = (3, 256, 256)
 
 # 손실 함수 정의
 criterion_GAN = nn.MSELoss()  # Adversarial loss
-creterion_identity = nn.L1Loss()    # identity_loss
+criterion_identity = nn.L1Loss()    # identity_loss
 
 # 모델 초기화
 generator_f = Generator(image_size).to(device)
-generator_s = Generator((4,256,256)).to(device)
+generator_s = Generator(image_size).to(device)
 discriminator = Discriminator(image_size).to(device)
 
 # 옵티마이저 정의
@@ -41,13 +41,15 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 dataset = ImageFolder(root='images/', transform=transform)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
 # 훈련 루프
 for epoch in range(epochs):
     for i, (shadow, mask) in enumerate(dataloader):
         shadow = shadow.to(device)
+        mask = mask.repeat(1,3,1,1)
         mask = mask.to(device)
+
 
         # ---------------------
         # Generator 훈련
@@ -56,27 +58,49 @@ for epoch in range(epochs):
 
         # 그림자 제거 이미지 생성
         shadow_free = generator_f(shadow)
-        Gs_input = torch.cat((shadow_free, mask), 1)
-        shadow_fake = generator_s(Gs_input)
+        shadow_fake = generator_s(shadow_free)
 
-        identity_loss = creterion_identity(shadow, shadow_fake)
-        identity_loss.backward()
+        outed_mask = shadow_fake-shadow_free
+
+        mask_loss = criterion_GAN(outed_mask, mask)
+        mask_loss.backward()
         optimizer_G.step()
 
         # ---------------------
         # Discriminator 훈련
         # ---------------------
         optimizer_D.zero_grad()
-        predicted = discriminator(shadow_free.detach())
+        predicted = discriminator(outed_mask.detach())
 
         label = torch.zeros_like(predicted)
 
-        adversarial_loss = criterion_GAN(predicted, label)
-        adversarial_loss.backward()
+        discriminate_loss = criterion_identity(predicted, label)
+
+        predicted = discriminator(mask.detach())
+        label = torch.ones_like(predicted)
+
+        discriminate_loss += criterion_identity(predicted, label)
+        discriminate_loss.backward()
         optimizer_D.step()
 
         if i % 10 == 0:
-            print(f"Epoch [{epoch+1}/{epochs}], "
-                  f"Loss G: {identity_loss.item():.4f}, Loss D: {adversarial_loss.item():.4f}")
+            print(f"Epoch [{epoch+1}/{epochs}], Batch [{i}/{len(dataloader)}]"
+                  f"generator loss {mask_loss.item():.4f}, discriminator loss: {discriminate_loss.item():.4f}")
+            transform = transforms.ToPILImage()
+            plot_free = transform(shadow_free[0])
+            plot_mask = transform(outed_mask[0])
+
+            # 서브플롯 구성 (2행 3열)
+            fig, axes = plt.subplots(1, 2)
+
+            axes[0].imshow(plot_free)
+            axes[0].axis('off')
+            axes[0].set_title('shadow free')
+            axes[1].imshow(plot_mask)
+            axes[1].axis('off')
+            axes[1].set_title('mask')
+
+            plt.tight_layout()
+            plt.show()
 
 torch.save(generator_f.state_dict(), 'generator.pth')
