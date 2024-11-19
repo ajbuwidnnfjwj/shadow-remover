@@ -17,10 +17,12 @@ transform = transforms.Compose([
 ])
 
 model = Model.Generator((3,256,256))
-model.load_state_dict(torch.load("generator.pth"))
+model.load_state_dict(torch.load("model/generator.pth"))
 
 output = model(transform(img)).detach()
-print(output.shape)
-output = output.view(256,256,3).numpy()
-cv.imshow(' ', output)
-cv.waitKey(0)
+retrans = transforms.Compose([
+    transforms.Resize(img.size),
+    transforms.ToPILImage()
+])
+output = retrans(output)
+output.show()

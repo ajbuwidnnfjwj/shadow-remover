@@ -23,8 +23,8 @@ learning_rate = 0.002
 image_size = (3, 256, 256)
 
 # 손실 함수 정의
-criterion_GAN = nn.MSELoss()  # Adversarial loss
-criterion_identity = nn.L1Loss()    # identity_loss
+criterion_adversarial = nn.MSELoss()  # Adversarial loss
+criterion_consistency = nn.L1Loss()    # identity_loss
 
 # 모델 초기화
 generator_f = Generator(image_size).to(device)
@@ -47,9 +47,7 @@ dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 for epoch in range(epochs):
     for i, (shadow, mask) in enumerate(dataloader):
         shadow = shadow.to(device)
-        mask = mask.repeat(1,3,1,1)
         mask = mask.to(device)
-
 
         # ---------------------
         # Generator 훈련
@@ -58,12 +56,11 @@ for epoch in range(epochs):
 
         # 그림자 제거 이미지 생성
         shadow_free = generator_f(shadow)
-        shadow_fake = generator_s(shadow_free)
+        guided = torch.cat([shadow_free, mask], dim=1)
+        shadow_fake = generator_s(shadow_free, mask)
 
-        outed_mask = shadow_fake-shadow_free
-
-        mask_loss = criterion_GAN(outed_mask, mask)
-        mask_loss.backward()
+        cycle_consist_loss = criterion_consistency(shadow_fake, shadow)
+        cycle_consist_loss.backward()
         optimizer_G.step()
 
         # ---------------------
@@ -74,12 +71,12 @@ for epoch in range(epochs):
 
         label = torch.zeros_like(predicted)
 
-        discriminate_loss = criterion_identity(predicted, label)
+        discriminate_loss = criterion_consistency(predicted, label)
 
         predicted = discriminator(mask.detach())
         label = torch.ones_like(predicted)
 
-        discriminate_loss += criterion_identity(predicted, label)
+        discriminate_loss += criterion_consistency(predicted, label)
         discriminate_loss.backward()
         optimizer_D.step()
 
