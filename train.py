@@ -28,7 +28,7 @@ criterion_consistency = nn.L1Loss()    # identity_loss
 
 # 모델 초기화
 generator_f = Generator(image_size).to(device)
-generator_s = Generator(image_size).to(device)
+generator_s = Generator((4,256,256)).to(device)
 discriminator = Discriminator(image_size).to(device)
 
 # 옵티마이저 정의
@@ -54,7 +54,7 @@ for epoch in range(epochs):
         # ---------------------
         optimizer_G.zero_grad()
 
-        # 그림자 제거 이미지 생성
+        # 그림자 제거 이미지 생성 - shadow cycle consistency loss
         shadow_free = generator_f(shadow)
         guided = torch.cat([shadow_free, mask], dim=1)
         shadow_fake = generator_s(shadow_free, mask)
@@ -62,6 +62,13 @@ for epoch in range(epochs):
         cycle_consist_loss = criterion_consistency(shadow_fake, shadow)
         cycle_consist_loss.backward()
         optimizer_G.step()
+
+        # shadow identity loss
+        guided = torch.cat([shadow, mask], dim=1)
+        shadow_fake = generator_s(guided)
+        identity_loss = criterion_consistency(shadow_fake, shadow)
+        identity_loss.backward()
+        optimizer_D.zero_grad()
 
         # ---------------------
         # Discriminator 훈련
