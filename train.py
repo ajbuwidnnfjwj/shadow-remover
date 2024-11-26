@@ -46,8 +46,9 @@ dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
 # 훈련 루프
 for epoch in range(epochs):
-    for i, (shadow, mask) in enumerate(dataloader):
+    for i, (shadow, removed ,mask) in enumerate(dataloader):
         shadow = shadow.to(device)
+        removed = removed.to(device)
         mask = mask.to(device)
 
         # ---------------------
