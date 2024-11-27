@@ -6,6 +6,20 @@ from torch.utils.data import Dataset, DataLoader
 
 import torchvision.models as models
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channel):
+        super(ResidualBlock, self).__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(channel, channel, 3),
+            nn.InstanceNorm2d(channel),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel, channel, 3),
+            nn.InstanceNorm2d(channel),
+        )
+
+    def forward(self, x):
+        return x + self.block(x)
+
 class Generator(nn.Module):
     '''UNet based Generator'''
     def __init__(self, size):
@@ -13,46 +27,37 @@ class Generator(nn.Module):
         :param size: tuple for size of input image (channels, height, width)
         '''
         super(Generator, self).__init__()
-        # 인코더
-        self.enc1 = self.conv_block(size[0], 64)
-        self.enc2 = self.conv_block(64, 128)
-        self.enc3 = self.conv_block(128, 256)
-        self.enc4 = self.conv_block(256, 512)
 
-        # 디코더
-        self.dec1 = self.up_conv(512, 256)
-        self.dec2 = self.up_conv(256, 128)
-        self.dec3 = self.up_conv(128, 64)
-        self.final_conv = nn.Conv2d(64, 3, kernel_size=1)
+        model = [nn.Conv2d(size, 64, kernel_size = 3, stride = 2),
+                 nn.InstanceNorm2d(64),
+                 nn.ReLU(inplace=True)]
 
-    def conv_block(self, in_channels, out_channels):
-        return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
-        )
+        in_features = 64
+        out_features = in_features * 2
+        for _ in range(2):
+            model += [nn.Conv2d(in_features, out_features, 3, stride=2, padding=1),
+                      nn.InstanceNorm2d(out_features),
+                      nn.ReLU(inplace=True)]
+            in_features = out_features
+            out_features = in_features * 2
 
-    def up_conv(self, in_channels, out_channels):
-        return nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2),
-            self.conv_block(out_channels, out_channels)
-        )
+        for _ in range(9):
+            model += [ResidualBlock(in_features)]
+
+        out_features = in_features // 2
+        for _ in range(2):
+            model += [nn.ConvTranspose2d(in_features, out_features, 3, stride=2),
+                      nn.InstanceNorm2d(out_features),
+                      nn.ReLU(inplace=True)]
+            in_features = out_features
+            out_features = in_features // 2
+
+        self.model = nn.Sequential(*model)
+
 
     def forward(self, x):
-        # 인코더 단계
-        e1 = self.enc1(x)
-        e2 = self.enc2(F.max_pool2d(e1, 2))
-        e3 = self.enc3(F.max_pool2d(e2, 2))
-        e4 = self.enc4(F.max_pool2d(e3, 2))
+        return x+self.model(x)
 
-        # 디코더 단계
-        d1 = self.dec1(e4)
-        d2 = self.dec2(d1 + e3)
-        d3 = self.dec3(d2 + e2)
-        out = self.final_conv(d3 + e1)
-
-        return out
 
 # 판별기 정의
 class Discriminator(nn.Module):
