@@ -20,49 +20,55 @@ class ResidualBlock(nn.Module):
         )
 
     def forward(self, x):
-        return x + self.block(x)
+        outed_x = self.block(x)
+        print(outed_x.shape)
+        return x + outed_x
 
 class Generator(nn.Module):
-    '''UNet based Generator'''
-    def __init__(self, size):
-        '''
-        :param size: tuple for size of input image (channels, height, width)
-        '''
+    def __init__(self, input_nc, output_nc, n_residual_blocks=9):
         super(Generator, self).__init__()
 
-        model = [nn.ReflectionPad2d(3),
-                 nn.Conv2d(size[0], 64, kernel_size = 3, stride = 2),
-                 nn.InstanceNorm2d(64),
-                 nn.ReLU(inplace=True)]
+        # Initial convolution block
+        model = [   nn.ReflectionPad2d(3),
+                    nn.Conv2d(input_nc, 64, 7),
+                    nn.InstanceNorm2d(64),
+                    nn.ReLU(inplace=True) ]
 
+        # Downsampling
         in_features = 64
-        out_features = in_features * 2
+        out_features = in_features*2
         for _ in range(2):
-            model += [nn.Conv2d(in_features, out_features, 3, stride=2, padding=1),
-                      nn.InstanceNorm2d(out_features),
-                      nn.ReLU(inplace=True)]
+            model += [  nn.Conv2d(in_features, out_features, 3, stride=2, padding=1),
+                        nn.InstanceNorm2d(out_features),
+                        nn.ReLU(inplace=True) ]
             in_features = out_features
-            out_features = in_features * 2
+            out_features = in_features*2
 
-        for _ in range(9):
+        # Residual blocks
+        for _ in range(n_residual_blocks):
             model += [ResidualBlock(in_features)]
 
-        out_features = in_features // 2
+        # Upsampling
+        out_features = in_features//2
         for _ in range(2):
-            model += [nn.ConvTranspose2d(in_features, out_features, 3, stride=2, padding=1, output_padding=1),
-                      nn.InstanceNorm2d(out_features),
-                      nn.ReLU(inplace=True)]
+            model += [  nn.ConvTranspose2d(in_features, out_features, 3, stride=2, padding=1, output_padding=1),
+                        nn.InstanceNorm2d(out_features),
+                        nn.ReLU(inplace=True) ]
             in_features = out_features
-            out_features = in_features // 2
+            out_features = in_features//2
 
-        model += [nn.ReflectionPad2d(3),
-                  nn.Conv2d(64, out_features, 3, 7)]
+        # Output layer
+        model += [  nn.ReflectionPad2d(3),
+                    nn.Conv2d(64, output_nc, 7) ]
+                    #nn.Tanh() ]
 
         self.model = nn.Sequential(*model)
 
 
     def forward(self, x):
-        return x+self.model(x)
+        outed_x = self.model(x)
+        print(outed_x.shape)
+        return x+outed_x
 
 
 # 판별기 정의

@@ -23,8 +23,8 @@ print(device)
 BATCH_SIZE = 10
 epochs = 300
 learning_rate = 0.002
-image_size = (3, 256, 256)
-guide_size = (4, 256, 256)
+image_channels = 3
+guide_channels = 4
 
 # 손실 함수 정의
 criterion_adversarial = nn.MSELoss()  # Adversarial loss
@@ -32,10 +32,10 @@ criterion_identity = nn.L1Loss()    # identity_loss
 criterion_cycle = nn.L1Loss()
 
 # 모델 초기화
-generator_f2s = Generator(guide_size).to(device)
-generator_s2f = Generator(image_size).to(device)
-discriminator_s = Discriminator(image_size).to(device)
-discriminator_f = Discriminator(image_size).to(device)
+generator_f2s = Generator(guide_channels, 3).to(device)
+generator_s2f = Generator(image_channels, 3).to(device)
+discriminator_s = Discriminator(image_channels).to(device)
+discriminator_f = Discriminator(image_channels).to(device)
 
 # 옵티마이저 정의
 optimizer_G = optim.Adam(itertools.chain(generator_f2s.parameters(), generator_s2f.parameters()),
@@ -80,7 +80,7 @@ for epoch in range(epochs):
 
         # shadow free GAN loss
         output = discriminator_f(free_fake)
-        label = torch.zeros_like(free_fake, requires_grad=False).to(device)
+        label = torch.zeros_like(output, requires_grad=False).to(device)
         gan_loss_free = criterion_adversarial(label, output)
 
         if len(mask_queue) > max_len:
@@ -109,7 +109,7 @@ for epoch in range(epochs):
 
         # shadow GAN loss
         output = discriminator_s(shadow_fake)
-        label = torch.zeros_like(shadow_fake, requires_grad=False).to(device)
+        label = torch.zeros_like(output, requires_grad=False).to(device)
         gan_loss_shadow = criterion_adversarial(label, output)
 
         ##################################################################################
