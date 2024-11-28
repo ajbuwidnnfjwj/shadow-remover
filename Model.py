@@ -10,9 +10,11 @@ class ResidualBlock(nn.Module):
     def __init__(self, channel):
         super(ResidualBlock, self).__init__()
         self.block = nn.Sequential(
+            nn.ReflectionPad2d(1),
             nn.Conv2d(channel, channel, 3),
             nn.InstanceNorm2d(channel),
             nn.ReLU(inplace=True),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(channel, channel, 3),
             nn.InstanceNorm2d(channel),
         )
@@ -28,7 +30,8 @@ class Generator(nn.Module):
         '''
         super(Generator, self).__init__()
 
-        model = [nn.Conv2d(size, 64, kernel_size = 3, stride = 2),
+        model = [nn.ReflectionPad2d(3),
+                 nn.Conv2d(size[0], 64, kernel_size = 3, stride = 2),
                  nn.InstanceNorm2d(64),
                  nn.ReLU(inplace=True)]
 
@@ -46,11 +49,14 @@ class Generator(nn.Module):
 
         out_features = in_features // 2
         for _ in range(2):
-            model += [nn.ConvTranspose2d(in_features, out_features, 3, stride=2),
+            model += [nn.ConvTranspose2d(in_features, out_features, 3, stride=2, padding=1, output_padding=1),
                       nn.InstanceNorm2d(out_features),
                       nn.ReLU(inplace=True)]
             in_features = out_features
             out_features = in_features // 2
+
+        model += [nn.ReflectionPad2d(3),
+                  nn.Conv2d(64, out_features, 3, 7)]
 
         self.model = nn.Sequential(*model)
 

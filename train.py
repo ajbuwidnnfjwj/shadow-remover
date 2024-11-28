@@ -89,8 +89,8 @@ for epoch in range(epochs):
 
         # shadow cycle-consistency loss
         guide = torch.cat((mask_queue[-1], free_fake), dim=1).to(device)
-        recovered_shadow_fake = generator_f2s(guide) # ~Is
-        shadow_cycle_consistency_loss = criterion_cycle(shadow, recovered_shadow_fake)
+        recovered_shadow = generator_f2s(guide) # ~Is
+        shadow_cycle_consistency_loss = criterion_cycle(shadow, recovered_shadow)
 
         # shadow identity loss
         mask_n = torch.zeros_like(shadow, requires_grad=False).to(device)
@@ -103,9 +103,8 @@ for epoch in range(epochs):
         guide = torch.cat(
             (mask_queue[random.randint(0, len(mask_queue)-1)], free), dim=1
         ).to(device)
-        shadow_fake = generator_f2s(guide)
-        free_fake = generator_s2f(shadow_fake) # ~If
-
+        recovered_free = generator_f2s(guide)
+        free_fake = generator_s2f(recovered_free) # ~If
         free_cycle_consistency_loss = criterion_cycle(free, free_fake)
 
         # shadow GAN loss
@@ -124,5 +123,31 @@ for epoch in range(epochs):
 
         pred_real = discriminator_s(shadow)
         label = torch.ones_like(pred_real, requires_grad=False).to(device)
-        loss_D_real = criterion_adversarial(pred_real, label)
+        loss_Ds_real = criterion_adversarial(pred_real, label)
 
+        pred_fake = discriminator_s(shadow_fake.detach())
+        label = torch.zeros_like(pred_fake, requires_grad=False).to(device)
+        loss_Ds_fake = criterion_adversarial(pred_fake, label)
+        loss_Ds = loss_Ds_real + loss_Ds_fake
+        loss_Ds.backward()
+
+        ##################################################################################
+        optimizer_DB.zero_grad()
+
+        pred_real = discriminator_f(free)
+        label = torch.ones_like(pred_real, requires_grad=False).to(device)
+        loss_Ds_real = criterion_adversarial(pred_real, label)
+
+        pred_fake = discriminator_f(free_fake)
+        label = torch.zeros_like(pred_fake, requires_grad=False).to(device)
+        loss_Ds_fake = criterion_adversarial(pred_fake, label)
+        loss_Ds = loss_Ds_real + loss_Ds_fake
+        loss_Ds.backward()
+
+        if (i+1) % 10 == 0:
+            print(f'{epoch} / {epochs}', end = ' ')
+            print(f'{gen_loss.item():.4f}')
+
+            transform = transforms.ToPILImage()
+            img_plt = transform(free_fake[0])
+            img_plt.show()
