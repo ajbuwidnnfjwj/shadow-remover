@@ -11,6 +11,7 @@ from ImageSet import ImageFolder
 import matplotlib.pyplot as plt
 
 import itertools
+import random
 
 import cv2 as cv
 import numpy as np
@@ -62,34 +63,66 @@ def mask_generator(shadow, free):
     _, otsu = cv2.threshold(diff, -1, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     return torch.from_numpy(otsu).float() / 255
 
+mask_queue = []
+max_len = 10
+
 # 훈련 루프
 for epoch in range(epochs):
     for i, (shadow, free , mask) in enumerate(dataloader):
         shadow = shadow.to(device)
         free = free.to(device)
-        mask = mask.to(device)
 
-        # ---------------------
-        # Generator 훈련
-        # ---------------------
         optimizer_G.zero_grad()
 
-        #identity loss
-        free_fake = generator_s2f(free) # ~If
+        # shadow free identity loss
+        free_fake = generator_s2f(free) # ~Ifi
         identity_loss_free = criterion_identity(free, free_fake)
 
-        #GAN loss
+        # shadow free GAN loss
         output = discriminator_f(free_fake)
-        label = torch.ones_like(free_fake, requires_grad=False).to(device)
+        label = torch.zeros_like(free_fake, requires_grad=False).to(device)
         gan_loss_free = criterion_adversarial(label, output)
 
-        guided = torch.cat((free, mask), dim=1)
-        shadow_fake = generator_f2s(guided) # ~Is
+        if len(mask_queue) > max_len:
+            mask_queue.pop(0)
+        mask_queue.append(mask_generator(shadow, free_fake))
+
+        # shadow cycle-consistency loss
+        guide = torch.cat((mask_queue[-1], free_fake), dim=1).to(device)
+        recovered_shadow_fake = generator_f2s(guide) # ~Is
+        shadow_cycle_consistency_loss = criterion_cycle(shadow, recovered_shadow_fake)
+
+        # shadow identity loss
+        mask_n = torch.zeros_like(shadow, requires_grad=False).to(device)
+        guide = torch.cat((mask_n, shadow), dim=1).to(device)
+        shadow_fake = generator_f2s(guide)
+        identity_loss_shadow = criterion_adversarial(shadow, shadow_fake)
+
+
+        # shadow free cycle consistency loss
+        guide = torch.cat(
+            (mask_queue[random.randint(0, len(mask_queue)-1)], free), dim=1
+        ).to(device)
+        shadow_fake = generator_f2s(guide)
+        free_fake = generator_s2f(shadow_fake) # ~If
+
+        free_cycle_consistency_loss = criterion_cycle(free, free_fake)
+
+        # shadow GAN loss
         output = discriminator_s(shadow_fake)
-        label = torch.zeros_like(output, requires_grad=False).to(device)
+        label = torch.zeros_like(shadow_fake, requires_grad=False).to(device)
         gan_loss_shadow = criterion_adversarial(label, output)
 
-        #shadow cycle_consistency
-        guided = torch.cat((free_fake, mask), dim=1)
-        shadow_fake_cycle = generator_f2s(guided)
-        consistency_loss_shadow = criterion_cycle(shadow_fake_cycle, shadow)
+        ##################################################################################
+        gen_loss = (identity_loss_free + identity_loss_shadow
+                      + gan_loss_free + gan_loss_shadow
+                      + shadow_cycle_consistency_loss + free_cycle_consistency_loss)
+        gen_loss.backward()
+
+        ##################################################################################
+        optimizer_DA.zero_grad()
+
+        pred_real = discriminator_s(shadow)
+        label = torch.ones_like(pred_real, requires_grad=False).to(device)
+        loss_D_real = criterion_adversarial(pred_real, label)
+
