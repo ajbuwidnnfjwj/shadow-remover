@@ -87,7 +87,7 @@ for epoch in range(epochs):
 
         # identity loss shadow
         shadow_fake_identity = generator_f2s(shadow, mask_n)
-        identity_loss_shadow = criterion_identity(shadow_fake_identity)
+        identity_loss_shadow = criterion_identity(shadow, shadow_fake_identity)
 
         # shadow cycle consistency loss && shadow free adversarial loss
         free_fake = generator_s2f(shadow)
