@@ -40,8 +40,8 @@ discriminator_f = Discriminator(image_channels).to(device)
 # 옵티마이저 정의
 optimizer_G = optim.Adam(itertools.chain(generator_f2s.parameters(), generator_s2f.parameters()),
                           lr=0.0002, betas=(0.5, 0.999))
-optimizer_DA = optim.Adam(discriminator_f.parameters(), lr=0.0002, betas=(0.5, 0.999))
-optimizer_DB = optim.Adam(discriminator_s.parameters(), lr=0.0002, betas=(0.5, 0.999))
+optimizer_Df = optim.Adam(discriminator_f.parameters(), lr=0.0002, betas=(0.5, 0.999))
+optimizer_Ds = optim.Adam(discriminator_s.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
 mask_n = torch.zeros((BATCH_SIZE, 1, 256, 256)).to(device)
 label_ones = torch.ones((BATCH_SIZE, 1), requires_grad=False).to(device)
@@ -121,7 +121,7 @@ for epoch in range(epochs):
         gen_loss.backward()
 
         ##################################################################################
-        optimizer_DA.zero_grad()
+        optimizer_Ds.zero_grad()
 
         pred_real = discriminator_s(shadow)
         label = torch.ones_like(pred_real, requires_grad=False).to(device)
@@ -134,25 +134,21 @@ for epoch in range(epochs):
         loss_Ds.backward()
 
         ##################################################################################
-        optimizer_DB.zero_grad()
+        optimizer_Df.zero_grad()
 
         pred_real = discriminator_f(free)
         label = torch.ones_like(pred_real, requires_grad=False).to(device)
-        loss_Ds_real = criterion_adversarial(pred_real, label)
+        loss_Df_real = criterion_adversarial(pred_real, label)
 
-        pred_fake = discriminator_f(free_fake)
+        pred_fake = discriminator_f(free_fake.detach())
         label = torch.zeros_like(pred_fake, requires_grad=False).to(device)
-        loss_Ds_fake = criterion_adversarial(pred_fake, label)
-        loss_Ds = loss_Ds_real + loss_Ds_fake
-        loss_Ds.backward()
+        loss_Df_fake = criterion_adversarial(pred_fake, label)
+        loss_Df = loss_Df_real + loss_Df_fake
+        loss_Df.backward()
 
         if (i+1) % 10 == 0:
             print(f'{epoch} / {epochs}, batch {i+1}/{len(dataloader)}', end = ' ')
             print(f'{gen_loss.item():.4f}')
-
-            transform = transforms.ToPILImage()
-            img_plt = transform(free_fake[0])
-            img_plt.show()
 
 torch.save(generator_f2s.state_dict(), 'models/generator_f2s.pth')
 torch.save(generator_s2f.state_dict(), 'models/generator_s2f.pth')
