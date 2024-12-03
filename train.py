@@ -121,12 +121,10 @@ for epoch in range(epochs):
         optimizer_Ds.zero_grad()
 
         pred_real = discriminator_s(shadow)
-        label = torch.ones_like(pred_real, requires_grad=False).to(device)
-        loss_Ds_real = criterion_adversarial(pred_real, label)
+        loss_Ds_real = criterion_adversarial(label_ones, pred_real)
 
         pred_fake = discriminator_s(shadow_fake.detach())
-        label = torch.zeros_like(pred_fake, requires_grad=False).to(device)
-        loss_Ds_fake = criterion_adversarial(pred_fake, label)
+        loss_Ds_fake = criterion_adversarial(label_ones, pred_fake)
         loss_Ds = loss_Ds_real + loss_Ds_fake
         loss_Ds.backward()
 
@@ -134,12 +132,10 @@ for epoch in range(epochs):
         optimizer_Df.zero_grad()
 
         pred_real = discriminator_f(free)
-        label = torch.ones_like(pred_real, requires_grad=False).to(device)
-        loss_Df_real = criterion_adversarial(pred_real, label)
+        loss_Df_real = criterion_adversarial(label_ones, pred_real)
 
         pred_fake = discriminator_f(free_fake.detach())
-        label = torch.zeros_like(pred_fake, requires_grad=False).to(device)
-        loss_Df_fake = criterion_adversarial(pred_fake, label)
+        loss_Df_fake = criterion_adversarial(label_ones, pred_fake)
         loss_Df = loss_Df_real + loss_Df_fake
         loss_Df.backward()
 
