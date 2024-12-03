@@ -82,37 +82,34 @@ for epoch in range(epochs):
         optimizer_G.zero_grad()
 
         # shadow free identity loss
-        free_fake = generator_s2f(free) # ~Ifi
-        identity_loss_free = criterion_identity(free, free_fake)
+        free_fake_identity = generator_s2f(free)
+        identity_loss_free = criterion_identity(free, free_fake_identity)
 
-        # shadow free GAN loss
-        output = discriminator_f(free_fake)
-        label = torch.zeros_like(output, requires_grad=False).to(device)
-        gan_loss_free = criterion_adversarial(label, output)
+        # identity loss shadow
+        shadow_fake_identity = generator_f2s(shadow, mask_n)
+        identity_loss_shadow = criterion_identity(shadow_fake_identity)
+
+        # shadow cycle consistency loss && shadow free adversarial loss
+        free_fake = generator_s2f(shadow)
+        mask_queue.append(mask_generator(shadow, free_fake))
 
         if len(mask_queue) > max_len:
             mask_queue.pop(0)
-        mask_queue.append(mask_generator(shadow, free_fake))
 
-        # shadow cycle-consistency loss
-        recovered_shadow = generator_f2s(free_fake, mask_queue[-1]) # ~Is
+        output = discriminator_f(free_fake)
+        gan_loss_free = criterion_adversarial(label_zeros, output)
+
+        recovered_shadow = generator_f2s(free_fake, mask_queue[-1])
         shadow_cycle_consistency_loss = criterion_cycle(shadow, recovered_shadow)
 
-        # shadow identity loss
-        shadow_fake = generator_f2s(shadow, mask_n)
-        identity_loss_shadow = criterion_adversarial(shadow, shadow_fake)
+        # shadow free cycle consistency loss && shadow adversarial loss
+        shadow_fake = generator_f2s(free, mask_queue[random.randint(0, len(mask_queue) - 1)])
 
-
-        # shadow free cycle consistency loss
-        guide = mask_queue[random.randint(0, len(mask_queue)-1)]
-        recovered_free = generator_f2s(free, guide)
-        free_fake = generator_s2f(recovered_free) # ~If
-        free_cycle_consistency_loss = criterion_cycle(free, free_fake)
-
-        # shadow GAN loss
         output = discriminator_s(shadow_fake)
-        label = torch.zeros_like(output, requires_grad=False).to(device)
-        gan_loss_shadow = criterion_adversarial(label, output)
+        gan_loss_shadow = criterion_adversarial(label_zeros, output)
+
+        recovered_free = generator_s2f(shadow_fake)
+        free_cycle_consistency_loss = criterion_cycle(free, recovered_free)
 
         ##################################################################################
         gen_loss = (identity_loss_free + identity_loss_shadow
@@ -149,6 +146,9 @@ for epoch in range(epochs):
         if (i+1) % 10 == 0:
             print(f'{epoch} / {epochs}, batch {i+1}/{len(dataloader)}', end = ' ')
             print(f'{gen_loss.item():.4f}')
+            transform = transforms.ToPILImage()
+            plt.imshow(transform(free_fake[0]))
+            plt.show()
 
 torch.save(generator_f2s.state_dict(), 'models/generator_f2s.pth')
 torch.save(generator_s2f.state_dict(), 'models/generator_s2f.pth')
