@@ -17,6 +17,7 @@ import cv2 as cv
 import numpy as np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('mps' if torch.mps.is_available() else 'cpu')
 print(device)
 
 # 하이퍼파라미터 설정

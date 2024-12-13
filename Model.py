@@ -115,22 +115,26 @@ class Generator_F2S(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, image_size):
         super(Discriminator, self).__init__()
-        self.model = models.vgg16(pretrained=True)
-        for param in self.model.parameters():  # 합성곱 레이어는 초기화하지 않음
-            param.requires_grad = False
-        num_features = self.model.classifier[6].in_features
-        self.model.classifier[6] = nn.Sequential(
-            nn.Linear(num_features, 512),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(512, 1),
-            nn.Softmax(dim=1)
-        )
+        model = [
+            nn.Conv2d(image_size, 64, 4, stride=2, padding=1),
+            nn.LeakyReLU(0.2)
+        ]
 
+        model += [nn.Conv2d(64, 128, 4, stride=2, padding=1),
+                  nn.InstanceNorm2d(128),
+                  nn.LeakyReLU(0.2) ]
+
+        model += [nn.Conv2d(128, 256, 4, stride=2, padding=1),
+                  nn.InstanceNorm2d(256),
+                  nn.LeakyReLU(0.2) ]
+
+        model += [nn.Conv2d(256, 512, 4, padding=1),
+                  nn.InstanceNorm2d(512),
+                  nn.LeakyReLU(0.2) ]
+        model += [nn.Conv2d(512, 1, 4, padding=1),]
+
+        self.model = nn.Sequential(*model)
 
     def forward(self, img):
-        '''
-        :param img: A batch of input images
-        :return:
-        '''
-        return self.model(img)
+        res = self.model(img)
+        return F.avg_pool2d(res, res.size()[2:]).view(res.size()[0], -1)
